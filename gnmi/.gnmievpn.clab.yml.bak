@@ -1,0 +1,82 @@
+name: nokia
+prefix: ""
+
+topology:
+  kinds:
+    srl:
+      image: ghcr.io/nokia/srlinux:23.3.2
+    linux:
+      image: praqma/network-multitool:extra
+
+  nodes:
+    leaf1:
+      kind: srl
+      mgmt-ipv4: 172.20.20.21
+      startup-config: leaf1.cfg  
+    leaf2:
+      kind: srl
+      mgmt-ipv4: 172.20.20.22
+      startup-config: leaf2.cfg  
+    spine1:
+      kind: srl
+      mgmt-ipv4: 172.20.20.23
+      startup-config: spine1.cfg  
+    srv1:
+      kind: linux
+      exec:
+        - ip link set dev eth1 mtu 9000
+        - ip addr add 192.168.0.1/24 dev eth1
+        - sysctl -w net.ipv4.tcp_rmem='4096 65536 33554432'
+        - sysctl -w net.ipv4.tcp_wmem='4096 65536 33554432'
+    srv2:
+      kind: linux
+      exec:
+        - ip link set dev eth1 mtu 9000
+        - ip addr add 192.168.0.2/24 dev eth1
+        - sysctl -w net.ipv4.tcp_rmem='4096 65536 33554432'
+        - sysctl -w net.ipv4.tcp_wmem='4096 65536 33554432'
+
+    ### TELEMETRY STACK ###
+    gnmic:
+      kind: linux
+      mgmt-ipv4: 172.20.20.41
+      image: ghcr.io/openconfig/gnmic:0.30.0
+      binds:
+        - gnmic-config.yml:/gnmic-config.yml:ro
+      cmd: --config /gnmic-config.yml --log subscribe
+      group: "10" # group 10 is assigned to the nodes of a telemetry stack
+
+    prometheus:
+      kind: linux
+      mgmt-ipv4: 172.20.20.42
+      image: prom/prometheus:v2.37.8
+      binds:
+        - prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      cmd: --config.file=/etc/prometheus/prometheus.yml
+      ports:
+        - 9090:9090
+      group: "10"
+
+    grafana:
+      kind: linux
+      mgmt-ipv4: 172.20.20.43
+      image: grafana/grafana:9.5.8
+      binds:
+        - gnmicdatasource.yml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      ports:
+        - 3000:3000
+      env:
+        # env vars to enable anonymous access
+        GF_ORG_ROLE: "Admin"
+        GF_ORG_NAME: "Main Org"
+        GF_AUTH_ANONYMOUS_ENABLED: "true"
+        GF_AUTH_ANONYMOUS: "true"
+      group: "10"
+
+  links:
+    # inter-switch links
+    - endpoints: ["leaf1:e1-49", "spine1:e1-1"]
+    - endpoints: ["leaf2:e1-49", "spine1:e1-2"]
+    # server links
+    - endpoints: ["srv1:eth1", "leaf1:e1-1"]
+    - endpoints: ["srv2:eth1", "leaf2:e1-1"]
