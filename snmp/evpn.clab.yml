@@ -1,0 +1,92 @@
+name: nokia
+prefix: ""
+
+topology:
+  kinds:
+    srl:
+      image: ghcr.io/nokia/srlinux:23.3.2
+    linux:
+      image: praqma/network-multitool:extra
+
+  nodes:
+    leaf1:
+      kind: srl
+      mgmt-ipv4: 172.20.20.21
+      startup-config: leaf1.cfg  
+    leaf2:
+      kind: srl
+      mgmt-ipv4: 172.20.20.22
+      startup-config: leaf2.cfg  
+    spine1:
+      kind: srl
+      mgmt-ipv4: 172.20.20.23
+      startup-config: spine1.cfg  
+    srv1:
+      kind: linux
+      exec:
+        - ip link set dev eth1 mtu 9000
+        - ip addr add 192.168.0.1/24 dev eth1
+        - sysctl -w net.ipv4.tcp_rmem='4096 65536 33554432'
+        - sysctl -w net.ipv4.tcp_wmem='4096 65536 33554432'
+    srv2:
+      kind: linux
+      exec:
+        - ip link set dev eth1 mtu 9000
+        - ip addr add 192.168.0.2/24 dev eth1
+        - sysctl -w net.ipv4.tcp_rmem='4096 65536 33554432'
+        - sysctl -w net.ipv4.tcp_wmem='4096 65536 33554432'
+
+    # InfluxDB ------------------------------------------------------------------------
+    influxDB:
+        kind: linux
+        image: influxdb:latest
+        mgmt-ipv4: 172.20.20.44
+        ports:
+            ## This port will be used for Telegraf to connect to 
+            - 8086:8086
+        env:
+            DOCKER_INFLUXDB_INIT_MODE: setup
+            DOCKER_INFLUXDB_INIT_USERNAME: super_admin
+            DOCKER_INFLUXDB_INIT_PASSWORD: admin_12345678
+            DOCKER_INFLUXDB_INIT_ORG: test_org
+            DOCKER_INFLUXDB_INIT_BUCKET: snmp
+            DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ImXlUjNTBFK_vRmhyswlf0l2A7CmJxkQabo7WQFYWaNxnsm9NdTb_1ZDFmsQvN_7b28idj465MqeeYobD-WPgA==
+        
+
+            
+    # Telegraf ------------------------------------------------------------------------
+    telegraf:
+        kind: linux
+        image: telegraf:latest
+        mgmt-ipv4: 172.20.20.45
+        binds:
+            - telegraf.conf:/etc/telegraf/telegraf.conf:ro
+        ports:
+            - 57000:57000
+
+    # Grafana
+    grafana:
+      kind: linux
+      mgmt-ipv4: 172.20.20.43
+      image: grafana/grafana:9.5.8
+      binds:
+        - influxdatasource.yml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+      ports:
+        - 3000:3000
+      env:
+        # env vars to enable anonymous access
+        GF_ORG_ROLE: "super_admin"
+        GF_ORG_NAME: "test_org"
+        GF_AUTH_ANONYMOUS_ENABLED: "true"
+        GF_AUTH_ANONYMOUS: "true"
+      group: "10"
+
+
+
+  links:
+    # inter-switch links
+    - endpoints: ["leaf1:e1-49", "spine1:e1-1"]
+    - endpoints: ["leaf2:e1-49", "spine1:e1-2"]
+    # server links
+    - endpoints: ["srv1:eth1", "leaf1:e1-1"]
+    - endpoints: ["srv2:eth1", "leaf2:e1-1"]

@@ -1,0 +1,18 @@
+all:
+  children:
+    linux:
+      hosts:
+        sflow:
+          ansible_host: 172.20.20.81
+        srv1:
+          ansible_host: 172.20.20.2
+        srv2:
+          ansible_host: 172.20.20.3
+    srl:
+      hosts:
+        leaf1:
+          ansible_host: 172.20.20.21
+        leaf2:
+          ansible_host: 172.20.20.22
+        spine1:
+          ansible_host: 172.20.20.23

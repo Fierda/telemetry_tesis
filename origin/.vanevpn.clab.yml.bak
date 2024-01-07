@@ -1,0 +1,46 @@
+name: origin
+prefix: ""
+
+topology:
+  kinds:
+    srl:
+      image: ghcr.io/nokia/srlinux:23.3.2
+    linux:
+      image: praqma/network-multitool:extra
+
+  nodes:
+    leaf1:
+      kind: srl
+      mgmt-ipv4: 172.20.20.21
+      startup-config: leaf1.cfg  
+    leaf2:
+      kind: srl
+      mgmt-ipv4: 172.20.20.22
+      startup-config: leaf2.cfg  
+    spine1:
+      kind: srl
+      mgmt-ipv4: 172.20.20.23
+      startup-config: spine1.cfg  
+    srv1:
+      kind: linux
+      exec:
+        - ip link set dev eth1 mtu 9000
+        - ip addr add 192.168.0.1/24 dev eth1
+        - sysctl -w net.ipv4.tcp_rmem='4096 65536 33554432'
+        - sysctl -w net.ipv4.tcp_wmem='4096 65536 33554432'
+    srv2:
+      kind: linux
+      exec:
+        - ip link set dev eth1 mtu 9000
+        - ip addr add 192.168.0.2/24 dev eth1
+        - sysctl -w net.ipv4.tcp_rmem='4096 65536 33554432'
+        - sysctl -w net.ipv4.tcp_wmem='4096 65536 33554432'
+
+
+  links:
+    # inter-switch links
+    - endpoints: ["leaf1:e1-49", "spine1:e1-1"]
+    - endpoints: ["leaf2:e1-49", "spine1:e1-2"]
+    # server links
+    - endpoints: ["srv1:eth1", "leaf1:e1-1"]
+    - endpoints: ["srv2:eth1", "leaf2:e1-1"]
